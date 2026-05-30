@@ -1,0 +1,23 @@
+# Core data
+numpy>=1.24,<2.0
+pandas>=2.0,<3.0
+pyarrow>=13.0
+scipy>=1.11
+
+# Tardis client (données crypto)
+tardis-client>=1.4.0
+
+# Config
+pyyaml>=6.0
+
+# Feature store read path
+duckdb>=0.10
+
+# Tests & lint
+pytest>=8.0
+ruff>=0.5
+
+# Notebooks & viz
+jupyter>=1.0
+nbconvert>=7.0
+matplotlib>=3.7

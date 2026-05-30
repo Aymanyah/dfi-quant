@@ -1,0 +1,90 @@
+# Feature registry. Humans bump versions; agents only read.
+
+features:
+  - id: ret_1d
+    version: v1
+    family: returns
+    source: ohlcv_1d
+    requires: [close]
+    params:
+      lookback_d: 1
+    description: |
+      Log-rendement journalier: log(close_t / close_{t-1}).
+      Brique de base pour toutes les features construites sur les rendements.
+      Premier bar toujours NaN.
+
+  - id: mom_20d
+    version: v1
+    family: returns
+    source: ohlcv_1d
+    requires: [close]
+    params:
+      window_d: 20
+    description: |
+      Momentum 20 jours: somme des log-rendements journaliers sur 20 jours.
+      Équivalent à log(close_t / close_{t-20}).
+      Positif = trend haussier récent, négatif = trend baissier.
+  - id: rv_30d
+    version: v1
+    family: volatility
+    source: ohlcv_1d
+    requires: [close]
+    params:
+      window_d: 30
+    description: |
+      Rolling 30-day annualized realized volatility from daily log-returns.
+      Computed as std(log_returns, 30) * sqrt(365). Non-negative.
+
+  - id: cvd_20d
+    version: v1
+    family: momentum
+    source: ohlcv_1d
+    requires: [taker_buy_vol, volume]
+    params:
+      window_d: 20
+    description: |
+      Rolling 20-day cumulative volume delta (net taker buy pressure),
+      normalized by average volume. Positive = sustained buying pressure.
+      Range is unbounded; typical values are [-2, 2].
+
+  - id: funding_zscore_14d
+    version: v1
+    family: derivatives
+    source: derivative_ticker
+    requires: [funding_rate]
+    params:
+      lookback_d: 14
+    description: |
+      Z-score of the 8h-funding-rate vs its 14-day rolling mean / std.
+      Returns empty series when funding_rate column is absent (e.g. ohlcv_1d).
+      Extreme positive => longs paying heavily; extreme negative => shorts paying.
+
+  - id: zscore_ret_composite
+    version: v1
+    family: returns
+    source: ohlcv_1d
+    requires: [close]
+    params:
+      windows: [15, 30, 60, 80, 100]
+      method: rolling
+      lookback_d: 100
+    description: |
+      Composite z-score of daily simple returns, averaged across multiple
+      rolling windows [15, 30, 60, 80, 100 days]. At each date t:
+        z_w(t) = (ret(t) - mu_w(t)) / sigma_w(t)   (rolling mean & std)
+        composite(t) = mean(z_15, z_30, z_60, z_80, z_100)
+      Averaging across windows reduces sensitivity to any single lookback.
+      Positive = return above average across all scales (momentum signal).
+      Set method=ewm in params to switch to exponential weighting.
+
+  - id: obi_0_5pct
+    version: v1
+    family: microstructure
+    source: book_snapshot_25
+    requires: [bid_price_0, ask_price_0, bid_size_0, ask_size_0]
+    params:
+      depth_pct: 0.5
+    description: |
+      Order book imbalance within 0.5% of the mid-price. Range [-1, 1].
+      Positive = bid-side dominance (buying pressure). Requires L2 snapshot
+      data; returns empty for ohlcv_1d source.

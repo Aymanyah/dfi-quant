@@ -1,0 +1,33 @@
+# Global settings. Single source of truth.
+project: dfi-quant
+env: dev
+
+storage:
+  raw_uri:      s3://dfi-tardis-raw
+  feature_uri:  s3://dfi-features
+  label_uri:    s3://dfi-labels
+  local_cache:  ~/Downloads/dfi-quant/data
+  # DuckDB-on-parquet is the read path; writes go to parquet directly.
+  duckdb_db:    ~/Downloads/dfi-quant/data/dfi.duckdb
+
+universe:
+  source: top_n_perp_volume
+  n: 40
+  rebalance: daily
+  exchanges: [binance-futures, bybit, okex-swap]
+  quote: USDT
+
+tardis:
+  api_key_env: TARDIS_API_KEY
+  data_types: [trades, book_snapshot_25, derivative_ticker, liquidations]
+  # Granularity used for feature construction
+  bar_freq: 1min
+
+labels:
+  horizons_min: [60, 240, 1440]
+  type: forward_log_return
+
+backtest:
+  ic_method: spearman
+  deciles: 10
+  cost_bps: 4
