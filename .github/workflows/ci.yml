@@ -1,0 +1,43 @@
+name: Feature CI
+
+on:
+  push:
+    paths:
+      - 'dfi_features/**'
+      - 'tests/**'
+      - 'configs/features.yaml'
+      - 'scripts/check_lookahead.py'
+      - 'agents/feature_qa/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install numpy pandas pyarrow scipy pyyaml pytest
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+      - name: Lookahead check — all features
+        run: |
+          for feature in $(python - <<'EOF'
+          import yaml
+          features = yaml.safe_load(open('configs/features.yaml'))['features']
+          print('\n'.join(f['id'] for f in features if f.get('source') == 'ohlcv_1d'))
+          EOF
+          ); do
+            echo "── Lookahead check: $feature"
+            python scripts/check_lookahead.py --feature $feature
+          done
