@@ -32,8 +32,9 @@ from agents.backtest_ic.ic_engine import (
 )
 from agents.backtest_ic.report import save_json, save_plots
 
-RAW = ROOT / "data" / "raw"
-OUT = ROOT / "reports" / "ic"
+RAW  = ROOT / "data" / "raw"
+FEAT = ROOT / "data" / "features"
+OUT  = ROOT / "reports" / "ic"
 
 HORIZONS_BY_FAMILY = {
     "returns":        [1, 3, 5, 7],
@@ -68,6 +69,39 @@ def load_features_registry() -> list[dict]:
 def load_universe() -> list[dict]:
     with open(ROOT / "configs" / "universe.yaml") as f:
         return yaml.safe_load(f)["assets"]
+
+
+# ── Feature loading — store first, recompute as fallback ─────────────────────
+
+def _load_from_store(feature_cfg: dict, asset: str) -> pd.Series:
+    """Read pre-computed feature values from data/features/ hive store.
+
+    Returns empty Series if the feature has not been computed yet.
+    """
+    family  = feature_cfg.get("family", "misc")
+    fid     = feature_cfg["id"]
+    version = feature_cfg.get("version", "v1")
+    base    = FEAT / f"feature_family={family}" / f"feature_id={fid}" \
+                   / f"version={version}" / f"asset={asset}"
+    parts   = sorted(base.rglob("part-*.parquet"))
+    if not parts:
+        return pd.Series(dtype=float)
+    df = pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
+    df["date"] = pd.to_datetime(df["ts"], unit="us", utc=True).dt.normalize()
+    return df.sort_values("date").set_index("date")["value"].rename(fid)
+
+
+def _get_signal(
+    feature_cfg: dict,
+    asset: str,
+    prices: dict[str, pd.DataFrame],
+) -> tuple[pd.Series, str]:
+    """Return signal for one asset, with source label (store or recompute)."""
+    sig = _load_from_store(feature_cfg, asset)
+    if not sig.empty:
+        return sig, "store"
+    sig = _compute_feature(feature_cfg, prices[asset])
+    return sig, "recompute"
 
 
 # ── Feature computation ───────────────────────────────────────────────────────
@@ -162,16 +196,17 @@ def run_feature(
 ) -> dict:
     fid = feature_cfg["id"]
 
-    # ── Raw signals ───────────────────────────────────────────────────────────
+    # ── Raw signals — feature store first, recompute as fallback ─────────────
     raw_signals: dict[str, pd.Series] = {}
     for asset in assets:
         if prices[asset].empty:
             continue
-        sig = _compute_feature(feature_cfg, prices[asset])
+        sig, source = _get_signal(feature_cfg, asset, prices)
         if sig.empty:
             print(f"  {asset}: empty (source non disponible)")
             continue
         raw_signals[asset] = sig
+        print(f"  {asset}: {len(sig)} barres [{source}]")
 
     if not raw_signals:
         print("  Aucun asset disponible — skip")
