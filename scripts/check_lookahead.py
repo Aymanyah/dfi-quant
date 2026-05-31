@@ -34,12 +34,13 @@ def _synth(n=43_200, seed=0):
     oi = 1_000_000.0 * np.exp(np.cumsum(rng.normal(0.0, 0.0005, n)))
     funding_rate = rng.normal(0.0001, 0.0003, n)
     taker_buy_vol = amount * rng.uniform(0.3, 0.7, n)
-    high = price * (1 + rng.uniform(0.0, 0.005, n))
-    low  = price * (1 - rng.uniform(0.0, 0.005, n))
+    high     = price * (1 + rng.uniform(0.0, 0.005, n))
+    low      = price * (1 - rng.uniform(0.0, 0.005, n))
+    n_trades = rng.integers(500, 5000, n).astype(float)
     return pd.DataFrame({
         "side": side, "amount": amount, "price": price,
         "close": price, "high": high, "low": low,
-        "volume": amount,
+        "volume": amount, "n_trades": n_trades,
         "taker_buy_vol": taker_buy_vol,
         "open_interest": oi, "funding_rate": funding_rate,
     }, index=ts)

@@ -139,6 +139,31 @@ features:
       Always <= 0. Near 0 = at the high, strongly negative = far below high.
       Mean-reversion signal for oversold assets.
 
+  - id: vol_ratio_20d
+    version: v1
+    family: momentum
+    source: ohlcv_1d
+    requires: [volume]
+    params:
+      window_d: 20
+      window_norm: 252
+      lookback_d: 272
+    description: |
+      Z-scored volume ratio: volume(t) / avg_volume_20d, normalized over
+      252-day rolling window. Positive = unusually high volume activity.
+
+  - id: trades_zscore_20d
+    version: v1
+    family: momentum
+    source: ohlcv_1d
+    requires: [n_trades]
+    params:
+      window_d: 20
+      lookback_d: 20
+    description: |
+      Z-scored daily trade count over 20-day rolling window.
+      Positive = unusually high market participation.
+
   - id: zscore_ret_composite
     version: v1
     family: returns
