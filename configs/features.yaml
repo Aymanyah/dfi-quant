@@ -99,6 +99,46 @@ features:
       ratio(t) = taker_buy_vol(t) / volume(t), then z-scored rolling 20d.
       Positive = unusual buying pressure relative to recent history.
 
+  - id: risk_adj_ret_20d
+    version: v1
+    family: momentum
+    source: ohlcv_1d
+    requires: [close]
+    params:
+      window_ret: 20
+      window_norm: 252
+      lookback_d: 272
+    description: |
+      Z-scored Sharpe-like ratio: 20d cumulative return / 20d realized vol,
+      normalized over 252-day rolling window. Rewards assets with high
+      returns relative to their volatility.
+
+  - id: hl_range_20d
+    version: v1
+    family: volatility
+    source: ohlcv_1d
+    requires: [high, low, close]
+    params:
+      window_d: 20
+      window_norm: 252
+      lookback_d: 272
+    description: |
+      Z-scored 20-day rolling high-low range ratio: mean((high-low)/close, 20d),
+      normalized over 252d. High values = elevated intraday activity.
+
+  - id: dist_from_high_20d
+    version: v1
+    family: momentum
+    source: ohlcv_1d
+    requires: [close]
+    params:
+      window_d: 20
+      lookback_d: 20
+    description: |
+      Distance from 20-day rolling high: close/max(close,20d) - 1.
+      Always <= 0. Near 0 = at the high, strongly negative = far below high.
+      Mean-reversion signal for oversold assets.
+
   - id: zscore_ret_composite
     version: v1
     family: returns
