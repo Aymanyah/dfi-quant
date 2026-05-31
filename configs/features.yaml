@@ -59,6 +59,46 @@ features:
       Returns empty series when funding_rate column is absent (e.g. ohlcv_1d).
       Extreme positive => longs paying heavily; extreme negative => shorts paying.
 
+  - id: rel_mom_20d
+    version: v1
+    family: momentum
+    source: ohlcv_1d
+    requires: [close]
+    params:
+      window_mom: 20
+      window_norm: 252
+      lookback_d: 272
+    description: |
+      Z-scored 20-day momentum. Computes close(t)/close(t-20)-1 then
+      normalises by its 252-day rolling mean and std. Positive = unusually
+      strong recent momentum relative to own history. Comparable cross-asset.
+
+  - id: reversal_5d
+    version: v1
+    family: momentum
+    source: ohlcv_1d
+    requires: [close]
+    params:
+      window_d: 5
+      lookback_d: 5
+    description: |
+      5-day short-term reversal: -(close(t)/close(t-5) - 1).
+      Positive = asset has sold off recently, expected to rebound.
+      Captures mean-reversion over 1-week horizon.
+
+  - id: taker_ratio_20d
+    version: v1
+    family: momentum
+    source: ohlcv_1d
+    requires: [taker_buy_vol, volume]
+    params:
+      window_d: 20
+      lookback_d: 20
+    description: |
+      Z-scored taker buy volume ratio over 20 days.
+      ratio(t) = taker_buy_vol(t) / volume(t), then z-scored rolling 20d.
+      Positive = unusual buying pressure relative to recent history.
+
   - id: zscore_ret_composite
     version: v1
     family: returns
