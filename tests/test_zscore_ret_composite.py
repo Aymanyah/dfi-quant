@@ -15,12 +15,11 @@ def _daily_df(n=150, seed=42, vol=0.02):
 
 def test_warmup_is_nan():
     """First max(windows)-1 values must be NaN — largest window drives warmup."""
-    df = _daily_df()
-    windows = [15, 30, 60, 80, 100]
+    df = _daily_df(n=350)
+    windows = [15, 30, 60, 80, 100, 150, 200, 250, 300]
     s = compute(df, {"windows": windows, "method": "rolling"})
-    # ret needs 1 bar (shift), then rolling(100) needs 100 bars → first 100 NaN
-    assert s.iloc[:100].isna().all(), "first 100 bars must be NaN (warmup)"
-    assert not pd.isna(s.iloc[100]), "bar 101 must be valid"
+    assert s.iloc[:300].isna().all(), "first 300 bars must be NaN (warmup)"
+    assert not pd.isna(s.iloc[300]), "bar 301 must be valid"
 
 
 def test_warmup_single_window():

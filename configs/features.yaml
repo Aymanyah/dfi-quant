@@ -65,14 +65,14 @@ features:
     source: ohlcv_1d
     requires: [close]
     params:
-      windows: [15, 30, 60, 80, 100]
+      windows: [15, 30, 60, 80, 100, 150, 200, 250, 300]
       method: rolling
-      lookback_d: 100
+      lookback_d: 300
     description: |
       Composite z-score of daily simple returns, averaged across multiple
-      rolling windows [15, 30, 60, 80, 100 days]. At each date t:
+      rolling windows [15, 30, 60, 80, 100, 150, 200, 250, 300 days]. At each date t:
         z_w(t) = (ret(t) - mu_w(t)) / sigma_w(t)   (rolling mean & std)
-        composite(t) = mean(z_15, z_30, z_60, z_80, z_100)
+        composite(t) = mean(z_15, ..., z_300)
       Averaging across windows reduces sensitivity to any single lookback.
       Positive = return above average across all scales (momentum signal).
       Set method=ewm in params to switch to exponential weighting.
