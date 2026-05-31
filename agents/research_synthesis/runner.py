@@ -5,6 +5,7 @@ suggests composites, and drafts a research note.
 
 Usage:
     python -m agents.research_synthesis.runner
+    python -m agents.research_synthesis.runner --horizon 5
 """
 from __future__ import annotations
 import argparse
@@ -13,7 +14,6 @@ import importlib
 import pathlib
 import sys
 
-import numpy as np
 import pandas as pd
 import yaml
 
@@ -26,11 +26,6 @@ from agents.research_synthesis.analyser import (
     rank_features,
     check_collinearity,
     suggest_composites,
-)
-from agents.research_synthesis.backtest import (
-    run_cross_asset_backtest,
-    aggregate_metrics,
-    save_backtest_plots,
 )
 
 RAW     = ROOT / "data" / "raw"
@@ -69,7 +64,6 @@ def write_research_note(
     collinear_pairs: list[dict],
     composites: list[dict],
     ic_results: dict[str, dict],
-    backtest_summaries: dict[str, pd.DataFrame],
     out_dir: pathlib.Path,
 ) -> pathlib.Path:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -91,9 +85,8 @@ def write_research_note(
     ]
 
     for i, row in ranking.iterrows():
-        fid = row["feature"]
-        qa_ok = qa_results.get(fid, False)
-        qa_flag = "✅" if qa_ok else "❌"
+        fid      = row["feature"]
+        qa_flag  = "✅" if qa_results.get(fid, False) else "❌"
         ic_fmt   = f"{row['IC']:+.4f}"
         icir_fmt = f"{row['ICIR']:+.3f}"
         exploit  = "⭐" if abs(row["ICIR"]) >= 0.10 else ""
@@ -114,7 +107,7 @@ def write_research_note(
     ]
 
     for fid, data in ic_results.items():
-        ic_h = [data["ic_mean"].get(str(h), "—") for h in [1, 3, 5, 7]]
+        ic_h   = [data["ic_mean"].get(str(h), "—") for h in [1, 3, 5, 7]]
         ic_fmt = [f"{float(v):+.4f}" if v != "nan" and v != "—" else "—" for v in ic_h]
         lines.append(f"| `{fid}` | {' | '.join(ic_fmt)} |")
 
@@ -164,37 +157,11 @@ def write_research_note(
         f"",
         f"---",
         f"",
-        f"## 5. Backtest L/S — métriques par feature",
-        f"",
-        f"Signal : +1 si feature > 0, -1 sinon. Entrée clôture t, capture ret t+1.",
+        f"## 5. Conclusions et recommandations",
         f"",
     ]
 
-    if backtest_summaries:
-        lines += [
-            f"| Feature | Asset | Sharpe | Max DD | Win rate | Return total |",
-            f"|---|---|---|---|---|---|",
-        ]
-        for fid, df in backtest_summaries.items():
-            for asset, row in df.iterrows():
-                sh  = f"{row['sharpe']:+.3f}"  if not np.isnan(row['sharpe'])    else "—"
-                dd  = f"{row['max_dd']*100:.1f}%" if not np.isnan(row['max_dd']) else "—"
-                wr  = f"{row['win_rate']*100:.1f}%" if not np.isnan(row['win_rate']) else "—"
-                ret = f"{row['total_ret']*100:.1f}%" if not np.isnan(row['total_ret']) else "—"
-                lines.append(f"| `{fid}` | {asset} | {sh} | {dd} | {wr} | {ret} |")
-    else:
-        lines.append("Aucune feature exploitable — backtest non exécuté.")
-
-    lines += [
-        f"",
-        f"---",
-        f"",
-        f"## 6. Conclusions et recommandations",
-        f"",
-    ]
-
-    # Auto-generate conclusions based on results
-    best = ranking.iloc[0] if len(ranking) > 0 else None
+    best        = ranking.iloc[0] if len(ranking) > 0 else None
     exploitable = ranking[ranking["ICIR"].abs() >= 0.10]["feature"].tolist()
 
     if best is not None:
@@ -215,17 +182,15 @@ def write_research_note(
         )
 
     if collinear_pairs:
-        pairs_str = ", ".join(f"`{p['feature_1']}` / `{p['feature_2']}`" for p in collinear_pairs)
+        pairs_str = ", ".join(
+            f"`{p['feature_1']}` / `{p['feature_2']}`" for p in collinear_pairs
+        )
         lines.append(
             f"- **Collinéarité détectée** entre {pairs_str}. "
             f"Utiliser le composite ICIR-pondéré plutôt que les features brutes."
         )
 
-    lines += [
-        f"- **Prochaine étape :** construire le signal composite et simuler le P&L "
-        f"sur la période 2020–2026.",
-        f"",
-    ]
+    lines += [f"", ]
 
     path = out_dir / "research_note.md"
     path.write_text("\n".join(lines))
@@ -255,11 +220,11 @@ def main():
     ranking = rank_features(ic_results, horizon=args.horizon)
     print(ranking[["feature", "IC", "ICIR"]].to_string(index=False))
 
-    # Collinearity — recompute signals
+    # Collinearity
     print("\nVérification de la collinéarité...")
-    assets = load_universe()
+    assets   = load_universe()
     registry = load_registry()
-    prices = {s: load_ohlcv(s) for s in assets}
+    prices   = {s: load_ohlcv(s) for s in assets}
 
     signals: dict[str, dict[str, pd.Series]] = {}
     for feat_cfg in registry:
@@ -268,11 +233,10 @@ def main():
         fid = feat_cfg["id"]
         if fid not in ic_results:
             continue
-        params = feat_cfg.get("params", {})
         try:
             mod = importlib.import_module(f"dfi_features.{fid}")
             signals[fid] = {
-                sym: mod.compute(df, params)
+                sym: mod.compute(df, feat_cfg.get("params", {}))
                 for sym, df in prices.items()
                 if not df.empty
             }
@@ -290,35 +254,9 @@ def main():
     composites = suggest_composites(ranking, collinear_pairs)
     print(f"\n{len(composites)} composite(s) suggéré(s).")
 
-    # ── L/S backtest on exploitable features ─────────────────────────────────
-    print("\nL/S backtest des features exploitables (|ICIR| ≥ 0.05)...")
-    exploitable = ranking[ranking["ICIR"].abs() >= 0.05]["feature"].tolist()
-
-    backtest_summaries: dict[str, pd.DataFrame] = {}
-    for fid in exploitable:
-        feat_cfg = next((f for f in registry if f["id"] == fid), None)
-        if feat_cfg is None or feat_cfg.get("source") != "ohlcv_1d":
-            continue
-        if fid not in signals:
-            continue
-        print(f"\n  {fid}")
-        bt_results = run_cross_asset_backtest(signals[fid], prices)
-        if not bt_results:
-            continue
-        metrics_df = aggregate_metrics(bt_results)
-        backtest_summaries[fid] = metrics_df
-
-        mean_sharpe = metrics_df["sharpe"].mean()
-        print(f"    Sharpe moyen cross-asset : {mean_sharpe:+.3f}")
-        print(metrics_df[["sharpe", "max_dd", "win_rate", "total_ret"]].to_string())
-
-        plot_path = save_backtest_plots(fid, bt_results, metrics_df, OUT_DIR)
-        print(f"    → {plot_path.relative_to(ROOT)}")
-
-    # ── Write research note ───────────────────────────────────────────────────
+    # Write research note
     path = write_research_note(
-        ranking, qa_results, collinear_pairs, composites,
-        ic_results, backtest_summaries, OUT_DIR,
+        ranking, qa_results, collinear_pairs, composites, ic_results, OUT_DIR,
     )
     print(f"\n→ {path.relative_to(ROOT)}")
     print("\n── Terminé ──")
