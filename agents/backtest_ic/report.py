@@ -138,7 +138,7 @@ def save_plots(
         for h in horizons:
             ic_h = ic_ts[h]
             for reg in ["high_vol", "low_vol"]:
-                mask = regime_labels == reg
+                mask = regime_labels.reindex(ic_h.index) == reg
                 regime_means[reg].append(ic_h[mask].mean())
 
         x = np.arange(len(horizons))
